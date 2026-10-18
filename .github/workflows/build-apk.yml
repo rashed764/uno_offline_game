@@ -33,6 +33,23 @@ jobs:
       - name: Add Capacitor Android Platform
         run: npx cap add android || true
 
+      - name: Configure Landscape Orientation in AndroidManifest
+        run: |
+          node -e '
+            const fs = require("fs");
+            const file = "android/app/src/main/AndroidManifest.xml";
+            if (fs.existsSync(file)) {
+              let content = fs.readFileSync(file, "utf8");
+              if (!content.includes("android:screenOrientation")) {
+                content = content.replace("<activity", "<activity android:screenOrientation=\"sensorLandscape\"");
+                fs.writeFileSync(file, content, "utf8");
+                console.log("Injected android:screenOrientation=\"sensorLandscape\" into AndroidManifest.xml");
+              }
+            } else {
+              console.log("AndroidManifest.xml not found yet.");
+            }
+          '
+
       - name: Sync Capacitor
         run: npx cap sync android
 

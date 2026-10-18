@@ -363,6 +363,12 @@
     const elem = document.documentElement;
     const isFullscreen = document.fullscreenElement || document.webkitFullscreenElement
       || document.mozFullScreenElement || document.msFullscreenElement;
+    try {
+      if (window.screen?.orientation?.lock) {
+        window.screen.orientation.lock('sensor-landscape').catch(() => {});
+      }
+    } catch (_) {}
+
     if (!isFullscreen && !fullscreenRequestInFlight) {
       try {
         if (elem.requestFullscreen) {
@@ -370,7 +376,7 @@
           elem.requestFullscreen({ navigationUI: 'hide' })
             .then(() => {
               try {
-                window.screen?.orientation?.lock?.('landscape').catch(() => {});
+                window.screen?.orientation?.lock?.('sensor-landscape').catch(() => {});
               } catch (_) {}
             })
             .catch(() => {})
@@ -453,10 +459,12 @@
 
   // Browsers require a user gesture before entering true fullscreen
   window.addEventListener('pointerdown', () => {
-    const isTouch = window.matchMedia('(pointer: coarse)').matches;
-    if (isTouch && Math.min(window.innerWidth, window.innerHeight) <= 768) {
+    try {
+      if (window.screen?.orientation?.lock) {
+        window.screen.orientation.lock('sensor-landscape').catch(() => {});
+      }
       requestFullscreenApp();
-    }
+    } catch (_) {}
   }, { capture: true });
   updateGameScaling();
 

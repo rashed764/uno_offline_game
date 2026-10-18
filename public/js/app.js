@@ -27,11 +27,17 @@ function initApp() {
     btnVsAi.addEventListener('click', () => {
       const name = nameInput.value.trim() || 'Player 1';
       appState.playerName = name;
-      const isOfflineMode = (typeof io === 'undefined' || !socket || !socket.connected);
-      if (isOfflineMode && typeof initLocalAiGame === 'function') {
-        initLocalAiGame(name);
+      appState.mode = 'ai';
+      const matchSetupModal = document.getElementById('match-setup-modal');
+      if (matchSetupModal) {
+        matchSetupModal.classList.remove('hidden');
       } else {
-        socket.emit('create_room', { playerName: name, mode: 'ai' });
+        const isOfflineMode = (typeof io === 'undefined' || !socket || !socket.connected);
+        if (isOfflineMode && typeof initLocalAiGame === 'function') {
+          initLocalAiGame(name);
+        } else {
+          socket.emit('create_room', { playerName: name, mode: 'ai' });
+        }
       }
     });
   }
@@ -41,27 +47,87 @@ function initApp() {
     btnCreateRoom.addEventListener('click', () => {
       const name = nameInput.value.trim() || 'Player 1';
       appState.playerName = name;
-      const isOfflineMode = (typeof io === 'undefined' || !socket || !socket.connected);
-      if (isOfflineMode) {
-        const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
-        appState.roomId = roomId;
-        appState.isHost = true;
-        appState.mode = 'lan';
-        const codeEl = document.getElementById('lobby-room-code');
-        if (codeEl) codeEl.textContent = roomId;
-        const qrContainer = document.getElementById('host-qr-container');
-        if (qrContainer && typeof generateQRCode === 'function') {
-          const netInfo = window.LocalNetwork ? window.LocalNetwork.initHost(roomId) : { payload: roomId };
-          generateQRCode('host-qr-container', netInfo.payload || roomId);
-        }
-        updatePlayersLobbyList([{ id: socket.id || 'host', name: name, isHost: true }]);
-        const startBtn = document.getElementById('btn-start-game');
-        if (startBtn) startBtn.classList.remove('hidden');
-        if (window.showScreen) window.showScreen('lobby-screen');
+      appState.mode = 'lan';
+      const matchSetupModal = document.getElementById('match-setup-modal');
+      if (matchSetupModal) {
+        matchSetupModal.classList.remove('hidden');
       } else {
-        socket.emit('create_room', { playerName: name, mode: 'lan' });
+        const isOfflineMode = (typeof io === 'undefined' || !socket || !socket.connected);
+        if (isOfflineMode) {
+          const roomId = 'LAN-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+          appState.roomId = roomId;
+          appState.isHost = true;
+          appState.mode = 'lan';
+          const codeEl = document.getElementById('lobby-room-code');
+          if (codeEl) codeEl.textContent = roomId;
+          const qrContainer = document.getElementById('host-qr-container');
+          if (qrContainer && typeof generateQRCode === 'function') {
+            const netInfo = window.LocalNetwork ? window.LocalNetwork.initHost(roomId) : { payload: roomId };
+            generateQRCode('host-qr-container', netInfo.payload || roomId);
+          }
+          updatePlayersLobbyList([{ id: socket.id || 'host', name: name, isHost: true }]);
+          const startBtn = document.getElementById('btn-start-game');
+          if (startBtn) startBtn.classList.remove('hidden');
+          if (window.showScreen) window.showScreen('lobby-screen');
+        } else {
+          socket.emit('create_room', { playerName: name, mode: 'lan' });
+        }
       }
     });
+  }
+
+  // Wager Modal Continue Button Wiring
+  const btnMatchConfirm = document.getElementById('btn-match-setup-confirm');
+  const matchSetupModal = document.getElementById('match-setup-modal');
+  const btnMatchCancel = document.getElementById('btn-match-setup-cancel');
+  const btnMatchClose = document.getElementById('btn-match-setup-close');
+
+  if (btnMatchConfirm && matchSetupModal) {
+    btnMatchConfirm.addEventListener('click', () => {
+      matchSetupModal.classList.add('hidden');
+      const name = nameInput?.value?.trim() || appState.playerName || 'Player 1';
+      appState.playerName = name;
+      const wagerInput = document.getElementById('match-wager-amount');
+      if (wagerInput) appState.stake = Number(wagerInput.value) || 50;
+
+      const isOfflineMode = (typeof io === 'undefined' || !socket || !socket.connected);
+
+      if (appState.mode === 'ai') {
+        if (isOfflineMode && typeof initLocalAiGame === 'function') {
+          initLocalAiGame(name);
+        } else {
+          socket.emit('create_room', { playerName: name, mode: 'ai' });
+        }
+      } else if (appState.mode === 'lan') {
+        const roomId = 'LAN-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+        appState.roomId = roomId;
+        appState.isHost = true;
+        if (isOfflineMode) {
+          const codeEl = document.getElementById('lobby-room-code');
+          if (codeEl) codeEl.textContent = roomId;
+          const qrContainer = document.getElementById('host-qr-container');
+          if (qrContainer && typeof generateQRCode === 'function') {
+            const netInfo = window.LocalNetwork ? window.LocalNetwork.initHost(roomId) : { payload: roomId };
+            generateQRCode('host-qr-container', netInfo.payload || roomId);
+          }
+          if (typeof updatePlayersLobbyList === 'function') {
+            updatePlayersLobbyList([{ id: socket?.id || 'host', name: name, isHost: true }]);
+          }
+          const startBtn = document.getElementById('btn-start-game');
+          if (startBtn) startBtn.classList.remove('hidden');
+          if (typeof showScreen === 'function') showScreen('lobby-screen');
+        } else {
+          socket.emit('create_room', { playerName: name, mode: 'lan', stake: appState.stake });
+        }
+      }
+    });
+  }
+
+  if (btnMatchCancel) {
+    btnMatchCancel.addEventListener('click', () => matchSetupModal?.classList.add('hidden'));
+  }
+  if (btnMatchClose) {
+    btnMatchClose.addEventListener('click', () => matchSetupModal?.classList.add('hidden'));
   }
 
   // Show Join Input Box Toggle
@@ -133,7 +199,31 @@ function initApp() {
       }
 
       appState.playerName = name;
-      socket.emit('join_room', { roomId: roomCode, playerName: name });
+      appState.roomId = roomCode;
+      appState.isHost = false;
+
+      const isOfflineMode = (typeof io === 'undefined' || !socket || !socket.connected);
+      if (isOfflineMode) {
+        if (window.LocalNetwork) {
+          window.LocalNetwork.connectToHost(roomCode, (code) => {
+            appState.roomId = code;
+          });
+        }
+        const codeEl = document.getElementById('lobby-room-code');
+        if (codeEl) codeEl.textContent = roomCode;
+        if (typeof updatePlayersLobbyList === 'function') {
+          updatePlayersLobbyList([
+            { id: 'host_player', name: 'Host Player', isHost: true },
+            { id: socket?.id || 'client', name: name, isHost: false }
+          ]);
+        }
+        const startBtn = document.getElementById('btn-start-game');
+        if (startBtn) startBtn.classList.add('hidden');
+        if (typeof showScreen === 'function') showScreen('lobby-screen');
+        showToast(`Connected to room ${roomCode}`);
+      } else {
+        socket.emit('join_room', { roomId: roomCode, playerName: name });
+      }
     });
   }
 
